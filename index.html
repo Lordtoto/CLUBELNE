@@ -281,12 +281,16 @@ async function saveProfile(){
   if(!player){ alert("Indique le prénom du joueur."); return; }
   const btn=document.getElementById("pf-go"); btn.disabled=true; btn.textContent="…";
   try{
-    const row={ user_id:USER.id, player, team };
-    const { error } = await sb.from('profiles').upsert(row);
+    const { data:{ user } } = await sb.auth.getUser();
+    if(!user){ alert("Session expirée. Reconnecte-toi."); return logout(); }
+    USER=user;
+    const row={ user_id:user.id, player, team };
+    const { error } = await sb.from('profiles').upsert(row, { onConflict:'user_id' });
     if(error) throw error;
     PROFILE=row; STAR=player; TEAM=team;
     await loadPlateaux();
-  }catch(e){ btn.disabled=false; btn.textContent="Réessayer"; alert("Enregistrement impossible. Réessaie."); }
+  }catch(e){ btn.disabled=false; btn.textContent="Réessayer"; console.error(e);
+    alert("Enregistrement impossible.\n\n"+((e&&e.message)||"erreur inconnue")+((e&&e.hint)?("\n\nIndice : "+e.hint):"")); }
 }
 function openSettings(){ renderProfileSetup(Object.assign({},PROFILE)); }
 
@@ -475,6 +479,7 @@ function wireSheet(){
 async function savePlateau(){
   const d=state.draft; if(!d)return;
   const btn=document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="Enregistrement…";
+  const gu=await sb.auth.getUser(); if(!gu.data.user){ alert("Session expirée. Reconnecte-toi."); return logout(); } USER=gu.data.user;
   const scorers={},assists={};
   d.scorers.forEach(s=>{const n=(s.name||"").trim(); if(n&&num(s.goals)>0)scorers[n]=(scorers[n]||0)+num(s.goals);});
   d.assists.forEach(s=>{const n=(s.name||"").trim(); if(n&&num(s.goals)>0)assists[n]=(assists[n]||0)+num(s.goals);});
@@ -488,7 +493,8 @@ async function savePlateau(){
     const i=state.plateaux.findIndex(x=>x.id===id);
     if(i>=0) state.plateaux[i]=body; else state.plateaux.push(body);
     closeSheet(); render();
-  }catch(e){ btn.disabled=false; btn.textContent="Réessayer"; alert("Erreur d'enregistrement. Réessaie."); }
+  }catch(e){ btn.disabled=false; btn.textContent="Réessayer"; console.error(e);
+    alert("Erreur d'enregistrement.\n\n"+((e&&e.message)||"erreur inconnue")+((e&&e.hint)?("\n\nIndice : "+e.hint):"")); }
 }
 async function delPlateau(id){
   if(!confirm("Supprimer ce plateau ? Action définitive.")) return;
